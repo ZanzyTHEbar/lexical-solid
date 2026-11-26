@@ -1,4 +1,4 @@
-import { Doc } from "yjs";
+import type { Doc } from "yjs";
 import { createContext, useContext } from "solid-js";
 
 export type CollaborationContextType = {

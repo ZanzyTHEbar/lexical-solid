@@ -1,4 +1,4 @@
-import { Doc } from "yjs";
+import type { Doc } from "yjs";
 import {
   type CollaborationContextType,
   useCollaborationContext,
@@ -48,7 +48,6 @@ type Props = {
 };
 
 export function CollaborationPlugin(props: Props): JSX.Element {
-  const isBindingInitialized = { current: false };
   const isProviderInitialized = { current: false };
 
   const collabContext = useCollaborationContext(
@@ -59,18 +58,20 @@ export function CollaborationPlugin(props: Props): JSX.Element {
   const { yjsDocMap, name, color } = collabContext;
 
   const [editor] = useLexicalComposerContext();
+  const [unsupportedDoc, setUnsupportedDoc] = createSignal<Doc>();
 
   createEffect(() => {
+    if (unsupportedDoc()) {
+      return;
+    }
     collabContext.isCollabActive = true;
-
-    return () => {
-      // Resetting flag only when unmount top level editor collab plugin. Nested
-      // editors (e.g. image caption) should unmount without affecting it
-      if (editor._parentEditor == null) {
+    // Nested editors (e.g. image captions) do not own the shared flag.
+    if (editor._parentEditor == null) {
+      onCleanup(() => {
         collabContext.isCollabActive = false;
-      }
-    };
-  }, [collabContext, editor]);
+      });
+    }
+  });
 
   const [provider, setProvider] = createSignal<Provider>();
 
@@ -86,44 +87,43 @@ export function CollaborationPlugin(props: Props): JSX.Element {
 
         const newProvider = props.providerFactory(props.id, yjsDocMap);
         setProvider(newProvider);
-
-        onCleanup(() => newProvider.disconnect());
       }
     )
   );
 
-  const [doc, setDoc] = createSignal(yjsDocMap.get(props.id));
   const [binding, setBinding] = createSignal<Binding>();
 
-  createEffect(() => {
-    const p = provider();
-    if (!p) {
-      return;
-    }
-
-    if (isBindingInitialized.current) {
-      return;
-    }
-
-    isBindingInitialized.current = true;
-
-    const newBinding = createBinding(
-      editor,
-      p,
-      props.id,
-      doc() || yjsDocMap.get(props.id),
-      yjsDocMap,
-      props.excludedProperties
-    );
-    setBinding(newBinding);
-
-    return () => {
-      newBinding.root.destroy(newBinding);
-    };
-  });
+  createEffect(
+    on(provider, (p) => {
+      if (!p) {
+        return;
+      }
+      const newBinding = createBinding(
+        editor,
+        p,
+        props.id,
+        yjsDocMap.get(props.id),
+        yjsDocMap,
+        props.excludedProperties
+      );
+      setBinding(newBinding);
+      onCleanup(() => newBinding.root.destroy(newBinding));
+    })
+  );
 
   return (
-    <Show when={provider() && binding()}>
+    <Show
+      when={provider() && binding() && !unsupportedDoc()}
+      fallback={
+        <Show when={unsupportedDoc()}>
+          <div role="alert">
+            Collaboration stopped because the provider replaced the shared
+            document. Your text is still in this editor, but changes are no
+            longer synced.
+          </div>
+        </Show>
+      }
+    >
       <YjsCollaborationCursors
         awarenessData={props.awarenessData}
         binding={binding()!}
@@ -135,7 +135,8 @@ export function CollaborationPlugin(props: Props): JSX.Element {
         initialEditorState={props.initialEditorState}
         name={name}
         provider={provider()!}
-        setDoc={setDoc}
+        isActive={() => !unsupportedDoc()}
+        setUnsupportedDoc={setUnsupportedDoc}
         shouldBootstrap={props.shouldBootstrap}
         yjsDocMap={yjsDocMap}
       />
@@ -152,12 +153,14 @@ function YjsCollaborationCursors(props: {
   color: string;
   shouldBootstrap: boolean;
   binding: Binding;
-  setDoc: Setter<Doc | undefined>;
+  isActive: () => boolean;
+  setUnsupportedDoc: Setter<Doc | undefined>;
   cursorsContainerRef?: CursorsContainerRef | undefined;
   initialEditorState?: InitialEditorStateType | undefined;
   awarenessData?: object;
   collabContext: CollaborationContextType;
 }) {
+  const binding = () => props.binding;
   const cursors = useYjsCollaboration(
     props.editor,
     props.id,
@@ -166,8 +169,8 @@ function YjsCollaborationCursors(props: {
     props.name,
     props.color,
     props.shouldBootstrap,
-    () => props.binding,
-    props.setDoc,
+    binding,
+    props.setUnsupportedDoc,
     props.cursorsContainerRef,
     props.initialEditorState,
     props.awarenessData
@@ -177,13 +180,14 @@ function YjsCollaborationCursors(props: {
     props.collabContext.clientID = props.binding.clientID;
   })
 
-  useYjsHistory(props.editor, () => props.binding);
+  useYjsHistory(props.editor, binding, props.isActive);
   useYjsFocusTracking(
     props.editor,
     () => props.provider,
     props.name,
     props.color,
-    props.awarenessData
+    props.awarenessData,
+    props.isActive
   );
 
   return <>{cursors}</>;

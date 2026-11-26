@@ -1,25 +1,39 @@
-# Lexical-Solid
+# Lexical Solid for ZenWriter
 
-SolidJS port of `@lexical/react`
+A Solid 1.x adapter for Lexical 0.53.0, based on the Solid port of [`@lexical/react`](https://www.npmjs.com/package/@lexical/react).
 
-This is a SolidJS port of [@lexical/react](https://www.npmjs.com/package/@lexical/react) (always based on the same `@lexical/react` version as the pinned [lexical-dependencies](#lexical-dependencies), see that section of the README for the current version).
+## Install the local artifact
 
-If you're using this library, I'd appreciate it if you let me know (in github discussions or in the lexical discord)!
+This fork builds a local tarball named `@zanzythebar/lexical-solid@0.22.0`. This name does not imply registry availability. From the repository root, use the pinned pnpm 10 version:
 
-# Installing
+```sh
+pnpm install --frozen-lockfile
+pnpm -C lexical-solid pack
+```
 
-`npm install lexical-solid`
+Packing builds the adapter and includes this README and both licenses. In your application, install the resulting tarball:
 
-or using the package manager of your choice.
+```sh
+npm install /path/to/zanzythebar-lexical-solid-0.22.0.tgz solid-js@^1.7.11 lexical@0.53.0 @lexical/yjs@0.53.0 yjs@^13.6.20
+```
 
-This repository uses `pnpm`, but if you are only a consumer of this library, you do not need it.
+## Runtime and TypeScript
 
-# Lexical Dependencies
+- Use ESM imports, Node 20 or newer for Node SSR and build tooling, and Solid `^1.7.11` (1.x). The browser build is the default for bundlers; the `solid` condition selects uncompiled JSX/source for bundlers configured to compile it. Node's default ESM resolution selects the compiled SSR build. There is no `require()` entrypoint.
+- Use TypeScript 5.8 or newer with `"module": "ESNext"` and `"moduleResolution": "bundler"`, including when type-checking an app that runs Node SSR. `node16`, `nodenext`, and legacy `node` resolution are not supported for these declarations.
+- Pin `lexical` and the `@lexical/*` packages you import to `0.53.0`. Keep the editor, adapter, `@lexical/yjs`, and any collaboration provider on the same ESM dependency graph. The provider must use the **same ESM Yjs instance** as the adapter: create and share its `Doc` via `import { Doc } from "yjs"`. Do not use a provider that loads Yjs via `require()` or bundles its own copy. Importing such a provider from ESM does not change how it loads Yjs.
 
-Currently using lexical packages version `0.30.0`, and ported from [@lexical/react](https://www.npmjs.com/package/@lexical/react) of the same version tag.
+## Collaboration provider reloads
 
-This package pins `lexical` and the `@lexical/*` packages to specific minor versions. This means that you can only upgrade your lexical version to the latest _patch_ version compatible with the current version. Attempting to upgrade the minor version will result in a broken state due to mismatched packages. See [#5](https://github.com/mosheduminer/lexical-solid/issues/5) for some discussion of the pinning strategy.
+Providers must keep the same `Y.Doc` for the lifetime of a mounted `CollaborationPlugin`. Reconnecting to that document is supported. If the provider emits `reload` with a different `Y.Doc`, the plugin disconnects and displays a warning. The editor keeps its current text in memory; subsequent edits are not synced. Save or copy that text before remounting a fresh collaboration session.
 
-# License
+## Migrate imports
 
-This code in this repository is very similar to the source react code, with modifications for use with SolidJS. The license distributed with `@lexical/react` can be found in [LICENSE-UPSTREAM](./LICENSE-UPSTREAM).
+Replace the `lexical-solid` prefix with `@zanzythebar/lexical-solid`. The ZenWriter subpaths `LexicalComposer`, `LexicalRichTextPlugin`, `LexicalContentEditable`, `LexicalComposerContext`, `LexicalErrorBoundary`, and `LexicalHistoryPlugin` keep their names.
+
+- The root `TreeView` is the editor-connected component (also available from `/LexicalTreeView`), with an explicit `editor` prop. Use `/TreeView` for the lower-level view that takes `editorState` and callbacks (`generateContent`, `setEditorState`, `setEditorReadOnly`, and `ref`). Both use class props such as `viewClassName` and `timeTravelPanelClassName`, not `viewClass` and `timeTravelPanelClass`.
+- The root also exports `generateContent`, `registerLexicalCommandLogger`, `useLexicalCommandsLog`, and the types `CustomPrintNodeFn` and `LexicalCommandLog`. The `/generateContent` and `/useLexicalCommandsLog` subpaths remain available.
+
+## License
+
+See [LICENSE](./LICENSE) and the [upstream license](./LICENSE-UPSTREAM) for `@lexical/react`.

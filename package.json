@@ -1,15 +1,12 @@
 {
   "name": "lexical-solid-repo",
+  "private": true,
+  "packageManager": "pnpm@10.32.1",
   "workspaces": [
     "lexical-solid",
-    "docs"
+    "example"
   ],
-  "nohoist": [
-    "**/solid-start"
-  ],
-  "scripts": {
-    "copy-readme": "copy README.md lexical-solid",
-    "remove-readme-copy": "del \"lexical-solid\\README.md\"",
-    "run-publish": "pnpm copy-readme && cd lexical-solid && pnpm build && npm publish && cd .. && pnpm run remove-readme-copy"
+  "devDependencies": {
+    "@types/prismjs": "^1.26.5"
   }
 }

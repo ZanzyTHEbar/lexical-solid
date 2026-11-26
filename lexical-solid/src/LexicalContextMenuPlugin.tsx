@@ -157,4 +157,5 @@ export function LexicalContextMenuPlugin<TOption extends MenuOption>(
   );
 }
 
-export { MenuOption, MenuRenderFn, MenuResolution };
+export { MenuOption };
+export type { MenuRenderFn, MenuResolution };

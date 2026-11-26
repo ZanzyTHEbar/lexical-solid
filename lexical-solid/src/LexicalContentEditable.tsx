@@ -1,4 +1,4 @@
-import type { Props as ElementProps } from "./shared/LexicalContentEditableElement";
+import type { ContentEditableElementProps } from "./shared/LexicalContentEditableElement";
 import type { LexicalEditor } from "lexical";
 import { useLexicalComposerContext } from "./LexicalComposerContext";
 import {
@@ -13,10 +13,10 @@ import {
 import { ContentEditableElement } from "./shared/LexicalContentEditableElement";
 import { useCanShowPlaceholder } from "./shared/useCanShowPlaceholder";
 
-export type ContentEditableProps = Omit<ElementProps, "editor"> &
+export type ContentEditableProps = Omit<ContentEditableElementProps, "editor"> &
   (
     | {
-        "aria-placeholder"?: void;
+        "aria-placeholder"?: undefined;
         placeholder?: null;
       }
     | {

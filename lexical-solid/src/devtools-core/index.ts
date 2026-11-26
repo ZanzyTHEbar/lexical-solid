@@ -1,7 +1,7 @@
-export { CustomPrintNodeFn, generateContent } from "./generateContent";
+export { type CustomPrintNodeFn, generateContent } from "./generateContent";
 export { TreeView } from "./TreeView";
 export {
-  LexicalCommandLog,
+  type LexicalCommandLog,
   registerLexicalCommandLogger,
   useLexicalCommandsLog,
 } from "./useLexicalCommandsLog";

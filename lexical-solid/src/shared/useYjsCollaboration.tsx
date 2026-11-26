@@ -13,7 +13,9 @@ import {
   SyncCursorPositionsFn,
 } from "@lexical/yjs";
 import {
+  type EditorUpdateOptions,
   LexicalEditor,
+  $addUpdateTag,
   $createParagraphNode,
   $getRoot,
   $getSelection,
@@ -25,7 +27,7 @@ import {
   REDO_COMMAND,
   UNDO_COMMAND,
 } from "lexical";
-import { Doc, Transaction, YEvent, UndoManager } from "yjs";
+import { type Doc, type Transaction, type YEvent, UndoManager } from "yjs";
 import { mergeRegister } from "@lexical/utils";
 import { InitialEditorStateType } from "../LexicalComposer";
 import { JSX, Setter } from "solid-js";
@@ -34,13 +36,65 @@ import {
   Accessor,
   createEffect,
   createMemo,
-  createSignal,
   on,
   onCleanup,
   onMount,
 } from "solid-js";
 
 export type CursorsContainerRef = Accessor<HTMLElement | undefined | null>;
+
+const BOOTSTRAP_TAG = "lexical-solid-collaboration-bootstrap";
+
+function guardInboundBinding(binding: Binding, isActive: () => boolean): Binding {
+  const editor = binding.editor;
+  const update = (apply: () => void, options?: EditorUpdateOptions) => {
+    if (!isActive()) {
+      return;
+    }
+    const onUpdate = options?.onUpdate;
+    editor.update(
+      () => {
+        if (isActive()) {
+          apply();
+        }
+      },
+      options && {
+        ...options,
+        // Lexical reads these when it drains a nested update. A retired
+        // update must not tag the enclosing edit or suppress its transforms.
+        get tag() {
+          return isActive() ? options.tag : undefined;
+        },
+        get skipTransforms() {
+          return isActive() ? options.skipTransforms : undefined;
+        },
+        onUpdate: onUpdate && (() => {
+          if (isActive()) {
+            onUpdate();
+          }
+        }),
+      }
+    );
+  };
+  // Keep Yjs event capture synchronous and use the real editor queue. Only
+  // the inbound helper sees this adapter, including its empty-root update.
+  const guardedEditor = new Proxy(editor, {
+    get(target, key) {
+      if (key === "update") {
+        return update;
+      }
+      const value = Reflect.get(target, key);
+      return typeof value === "function" && key !== "constructor"
+        ? value.bind(target)
+        : value;
+    },
+  });
+  return new Proxy(binding, {
+    get(target, key) {
+      return key === "editor" ? guardedEditor : Reflect.get(target, key);
+    },
+  });
+}
 
 export function useYjsCollaboration(
   editor: LexicalEditor,
@@ -51,49 +105,103 @@ export function useYjsCollaboration(
   color: string,
   shouldBootstrap: boolean,
   binding: Accessor<Binding>,
-  setDoc: Setter<Doc | undefined>,
+  setUnsupportedDoc: Setter<Doc | undefined>,
   cursorsContainerRef?: CursorsContainerRef,
   initialEditorState?: InitialEditorStateType,
   awarenessData?: object,
   syncCursorPositionsFn: SyncCursorPositionsFn = syncCursorPositions
 ): Accessor<JSX.Element> {
-  let isReloadingDoc: boolean = false;
-
-  const connect = () => provider().connect();
-
-  const disconnect = () => {
-    try {
-      provider().disconnect();
-    } catch (e) {
-      // Do nothing
-    }
-  };
+  let stopped = false;
+  let toggleConnection: ((shouldConnect: boolean) => void) | undefined;
 
   createEffect(
     on(binding, () => {
-      const { root } = binding();
-      const { awareness } = provider();
+      const currentBinding = binding();
+      const { doc, root } = currentBinding;
+      const sharedRoot = root.getSharedType();
+      const currentProvider = provider();
+      const { awareness } = currentProvider;
+      const bootstrapOrigin = Symbol(BOOTSTRAP_TAG);
+      let active = true;
+      let synced = false;
+      const isActive = () => active && !stopped;
+      const inboundBinding = guardInboundBinding(currentBinding, isActive);
+      const canBootstrap = () =>
+        isActive() && synced && root.isEmpty() && sharedRoot.length === 0;
+
+      const disconnect = () => {
+        try {
+          currentProvider.disconnect();
+        } catch {
+          // A provider error must not leave the editor bound to a retired doc.
+        }
+      };
+
+      const connect = () => {
+        if (!isActive()) {
+          return;
+        }
+        const disconnectIfStopped = () => {
+          if (!isActive()) {
+            disconnect();
+          }
+        };
+        const pending = currentProvider.connect();
+        if (pending) {
+          void pending.then(disconnectIfStopped, disconnectIfStopped);
+        } else {
+          // A synchronous connect may finish opening after a reentrant reload.
+          disconnectIfStopped();
+        }
+      };
+
+      toggleConnection = (shouldConnect) => {
+        if (!isActive()) {
+          return;
+        }
+        if (shouldConnect) {
+          // eslint-disable-next-line no-console
+          console.log("Collaboration connected!");
+          connect();
+        } else {
+          // eslint-disable-next-line no-console
+          console.log("Collaboration disconnected!");
+          disconnect();
+        }
+      };
 
       const onStatus = ({ status }: { status: string }) => {
-        editor.dispatchCommand(CONNECTED_COMMAND, status === "connected");
+        if (isActive()) {
+          if (status !== "connected") {
+            synced = false;
+          }
+          editor.dispatchCommand(CONNECTED_COMMAND, status === "connected");
+        }
       };
 
       const onSync = (isSynced: boolean) => {
-        if (
-          shouldBootstrap &&
-          isSynced &&
-          root.isEmpty() &&
-          root._xmlText._length === 0 &&
-          isReloadingDoc === false
-        ) {
-          initializeEditor(editor, initialEditorState);
+        synced = isSynced;
+        if (!shouldBootstrap || !canBootstrap()) {
+          return;
         }
 
-        isReloadingDoc = false;
+        // A provider can emit sync from inside a Lexical update or Yjs
+        // transaction. Commit any pending editor work before tagging the seed.
+        queueMicrotask(() => {
+          if (
+            canBootstrap() &&
+            editor.read(() => $getRoot().isEmpty()) &&
+            canBootstrap()
+          ) {
+            initializeEditor(editor, initialEditorState);
+          }
+        });
       };
 
       const onAwarenessUpdate = () => {
-        syncCursorPositionsFn(binding(), provider());
+        if (isActive()) {
+          syncCursorPositionsFn(currentBinding, currentProvider);
+        }
       };
 
       const onYjsTreeChanges = (
@@ -103,39 +211,36 @@ export function useYjsCollaboration(
         transaction: Transaction
       ) => {
         const origin = transaction.origin;
-        if (origin !== binding()) {
+        if (
+          isActive() &&
+          origin !== currentBinding &&
+          origin !== bootstrapOrigin
+        ) {
           const isFromUndoManager = origin instanceof UndoManager;
           syncYjsChangesToLexical(
-            binding(),
-            provider(),
+            inboundBinding,
+            currentProvider,
             events,
             isFromUndoManager,
-            syncCursorPositionsFn
+            onAwarenessUpdate
           );
         }
       };
 
-      initLocalState(
-        provider(),
-        name,
-        color,
-        document.activeElement === editor.getRootElement(),
-        awarenessData || {}
-      );
-
       const onProviderDocReload = (ydoc: Doc) => {
-        clearEditorSkipCollab(editor, binding());
-        setDoc(ydoc);
-        docMap.set(id, ydoc);
-        isReloadingDoc = true;
+        if (!isActive() || ydoc === doc) {
+          return;
+        }
+        stopped = true;
+        setUnsupportedDoc(ydoc);
+        disconnect();
+        editor.dispatchCommand(CONNECTED_COMMAND, false);
+        editor.dispatchCommand(CAN_UNDO_COMMAND, false);
+        editor.dispatchCommand(CAN_REDO_COMMAND, false);
       };
 
-      provider().on("reload", onProviderDocReload);
-      provider().on("status", onStatus);
-      provider().on("sync", onSync);
-      awareness.on("update", onAwarenessUpdate);
       // This updates the local editor state when we receive updates from other clients
-      root.getSharedType().observeDeep(onYjsTreeChanges);
+      sharedRoot.observeDeep(onYjsTreeChanges);
       const removeListener = editor.registerUpdateListener(
         ({
           prevEditorState,
@@ -145,10 +250,13 @@ export function useYjsCollaboration(
           normalizedNodes,
           tags,
         }) => {
-          if (tags.has("skip-collab") === false) {
+          if (!isActive() || tags.has("skip-collab")) {
+            return;
+          }
+          const syncUpdate = () =>
             syncLexicalUpdateToYjs(
-              binding(),
-              provider(),
+              currentBinding,
+              currentProvider,
               prevEditorState,
               editorState,
               dirtyElements,
@@ -156,28 +264,47 @@ export function useYjsCollaboration(
               normalizedNodes,
               tags
             );
+          if (tags.has(BOOTSTRAP_TAG)) {
+            // The nested Lexical Yjs write inherits this untracked origin.
+            // Unlike a binding-wide flag, the origin belongs to this transaction.
+            doc.transact(syncUpdate, bootstrapOrigin);
+          } else {
+            syncUpdate();
           }
         }
       );
-      const connectionPromise = connect();
-
       onCleanup(() => {
-        if (isReloadingDoc === false) {
-          if (connectionPromise) {
-            connectionPromise.then(disconnect);
-          } else {
-            disconnect();
-          }
-        }
-
-        provider().off("sync", onSync);
-        provider().off("status", onStatus);
-        provider().off("reload", onProviderDocReload);
+        active = false;
+        toggleConnection = undefined;
+        currentProvider.off("sync", onSync);
+        currentProvider.off("status", onStatus);
+        currentProvider.off("reload", onProviderDocReload);
         awareness.off("update", onAwarenessUpdate);
-        root.getSharedType().unobserveDeep(onYjsTreeChanges);
-        docMap.delete(id);
+        sharedRoot.unobserveDeep(onYjsTreeChanges);
+        if (docMap.get(id) === doc) {
+          docMap.delete(id);
+        }
         removeListener();
+        if (!stopped) {
+          disconnect();
+        }
       });
+      currentProvider.on("reload", onProviderDocReload);
+      currentProvider.on("status", onStatus);
+      currentProvider.on("sync", onSync);
+      awareness.on("update", onAwarenessUpdate);
+      // Awareness publication can synchronously replace the document.
+      if (!isActive()) {
+        return;
+      }
+      initLocalState(
+        currentProvider,
+        name,
+        color,
+        document.activeElement === editor.getRootElement(),
+        awarenessData || {}
+      );
+      connect();
     })
   );
   const cursorsContainer = createMemo(() => {
@@ -198,18 +325,8 @@ export function useYjsCollaboration(
   onCleanup(
     editor.registerCommand(
       TOGGLE_CONNECT_COMMAND,
-      (payload) => {
-        const shouldConnect = payload;
-        if (shouldConnect) {
-          // eslint-disable-next-line no-console
-          console.log("Collaboration connected!");
-          connect();
-        } else {
-          // eslint-disable-next-line no-console
-          console.log("Collaboration disconnected!");
-          disconnect();
-        }
-
+      (shouldConnect) => {
+        toggleConnection?.(shouldConnect);
         return true;
       },
       COMMAND_PRIORITY_EDITOR
@@ -224,13 +341,17 @@ export function useYjsFocusTracking(
   provider: Accessor<Provider>,
   name: string,
   color: string,
-  awarenessData?: object
+  awarenessData?: object,
+  isActive: Accessor<boolean> = () => true
 ) {
   onCleanup(
     mergeRegister(
       editor.registerCommand(
         FOCUS_COMMAND,
         () => {
+          if (!isActive()) {
+            return false;
+          }
           setLocalStateFocus(
             provider(),
             name,
@@ -245,6 +366,9 @@ export function useYjsFocusTracking(
       editor.registerCommand(
         BLUR_COMMAND,
         () => {
+          if (!isActive()) {
+            return false;
+          }
           setLocalStateFocus(
             provider(),
             name,
@@ -262,19 +386,30 @@ export function useYjsFocusTracking(
 
 export function useYjsHistory(
   editor: LexicalEditor,
-  binding: Accessor<Binding>
+  binding: Accessor<Binding>,
+  isActive: Accessor<boolean> = () => true
 ): () => void {
-  const undoManager = createMemo(() =>
-    createUndoManager(binding(), binding().root.getSharedType())
-  );
+  const undoManager = createMemo(() => {
+    const currentBinding = binding();
+    const manager = createUndoManager(
+      currentBinding,
+      currentBinding.root.getSharedType()
+    );
+    onCleanup(() => manager.destroy());
+    return manager;
+  });
 
   onMount(() => {
     const undo = () => {
-      undoManager().undo();
+      if (isActive()) {
+        undoManager().undo();
+      }
     };
 
     const redo = () => {
-      undoManager().redo();
+      if (isActive()) {
+        undoManager().redo();
+      }
     };
 
     onCleanup(
@@ -304,23 +439,24 @@ export function useYjsHistory(
 
   // Exposing undo and redo states
   createEffect(() => {
+    const manager = undoManager();
     const updateUndoRedoStates = () => {
       editor.dispatchCommand(
         CAN_UNDO_COMMAND,
-        undoManager().undoStack.length > 0
+        isActive() && manager.undoStack.length > 0
       );
       editor.dispatchCommand(
         CAN_REDO_COMMAND,
-        undoManager().redoStack.length > 0
+        isActive() && manager.redoStack.length > 0
       );
     };
-    undoManager().on("stack-item-added", updateUndoRedoStates);
-    undoManager().on("stack-item-popped", updateUndoRedoStates);
-    undoManager().on("stack-cleared", updateUndoRedoStates);
+    manager.on("stack-item-added", updateUndoRedoStates);
+    manager.on("stack-item-popped", updateUndoRedoStates);
+    manager.on("stack-cleared", updateUndoRedoStates);
     onCleanup(() => {
-      undoManager().off("stack-item-added", updateUndoRedoStates);
-      undoManager().off("stack-item-popped", updateUndoRedoStates);
-      undoManager().off("stack-cleared", updateUndoRedoStates);
+      manager.off("stack-item-added", updateUndoRedoStates);
+      manager.off("stack-item-popped", updateUndoRedoStates);
+      manager.off("stack-cleared", updateUndoRedoStates);
     });
   });
 
@@ -329,7 +465,7 @@ export function useYjsHistory(
 
 function initializeEditor(
   editor: LexicalEditor,
-  initialEditorState?: InitialEditorStateType
+  initialEditorState: InitialEditorStateType | undefined
 ): void {
   editor.update(
     () => {
@@ -342,30 +478,24 @@ function initializeEditor(
               const parsedEditorState =
                 editor.parseEditorState(initialEditorState);
               editor.setEditorState(parsedEditorState, {
-                tag: "history-merge",
+                 tag: BOOTSTRAP_TAG,
               });
               break;
             }
             case "object": {
               editor.setEditorState(initialEditorState, {
-                tag: "history-merge",
+                 tag: BOOTSTRAP_TAG,
               });
               break;
             }
             case "function": {
-              editor.update(
-                () => {
-                  const root1 = $getRoot();
-                  if (root1.isEmpty()) {
-                    initialEditorState(editor);
-                  }
-                },
-                { tag: "history-merge" }
-              );
+              $addUpdateTag(BOOTSTRAP_TAG);
+              initialEditorState(editor);
               break;
             }
           }
         } else {
+          $addUpdateTag(BOOTSTRAP_TAG);
           const paragraph = $createParagraphNode();
           root.append(paragraph);
           const { activeElement } = document;
@@ -381,52 +511,8 @@ function initializeEditor(
       }
     },
     {
+      discrete: true,
       tag: "history-merge",
     }
   );
-}
-
-function clearEditorSkipCollab(editor: LexicalEditor, binding: Binding) {
-  // reset editor state
-  editor.update(
-    () => {
-      const root = $getRoot();
-      root.clear();
-      root.select();
-    },
-    {
-      tag: "skip-collab",
-    }
-  );
-
-  if (binding.cursors == null) {
-    return;
-  }
-
-  const cursors = binding.cursors;
-
-  if (cursors == null) {
-    return;
-  }
-  const cursorsContainer = binding.cursorsContainer;
-
-  if (cursorsContainer == null) {
-    return;
-  }
-
-  // reset cursors in dom
-  const cursorsArr = Array.from(cursors.values());
-
-  for (let i = 0; i < cursorsArr.length; i++) {
-    const cursor = cursorsArr[i];
-    const selection = cursor.selection;
-
-    if (selection && selection.selections != null) {
-      const selections = selection.selections;
-
-      for (let j = 0; j < selections.length; j++) {
-        cursorsContainer.removeChild(selections[i]);
-      }
-    }
-  }
 }

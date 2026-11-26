@@ -1,5 +1,5 @@
-import { useLexicalComposerContext } from "lexical-solid/LexicalComposerContext";
-import { TreeView } from "lexical-solid/LexicalTreeView";
+import { useLexicalComposerContext } from "@zanzythebar/lexical-solid/LexicalComposerContext";
+import { TreeView } from "@zanzythebar/lexical-solid/LexicalTreeView";
 
 export default function TreeViewPlugin() {
   const [editor] = useLexicalComposerContext();

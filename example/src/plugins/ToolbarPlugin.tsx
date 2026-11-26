@@ -1,5 +1,5 @@
 //TODO: update and fix this
-import { useLexicalComposerContext } from "lexical-solid/LexicalComposerContext";
+import { useLexicalComposerContext } from "@zanzythebar/lexical-solid/LexicalComposerContext";
 import {
   CAN_REDO_COMMAND,
   CAN_UNDO_COMMAND,
@@ -40,8 +40,8 @@ import {
   $createCodeNode,
   $isCodeNode,
   getDefaultCodeLanguage,
-  getCodeLanguages,
 } from "@lexical/code";
+import { getCodeLanguages } from "@lexical/code-prism";
 import { Portal } from "solid-js/web";
 import {
   createEffect,

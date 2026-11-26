@@ -40,3 +40,10 @@ export * from "./useLexicalIsContentEmpty";
 export * from "./useLexicalNodeSelection";
 export * from "./useLexicalSubscription";
 export * from "./useLexicalTextEntity";
+export {
+  type CustomPrintNodeFn,
+  type LexicalCommandLog,
+  generateContent,
+  registerLexicalCommandLogger,
+  useLexicalCommandsLog,
+} from "./devtools-core/index";

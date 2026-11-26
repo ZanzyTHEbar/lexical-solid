@@ -1,13 +1,13 @@
 import { $getRoot, $getSelection, EditorState, LexicalEditor } from "lexical";
 
 import ExampleTheme from "../themes/PlainTextTheme";
-import { OnChangePlugin } from "lexical-solid/LexicalOnChangePlugin";
-import { AutoFocusPlugin } from "lexical-solid/LexicalAutoFocusPlugin";
-import { LexicalComposer } from "lexical-solid/LexicalComposer";
-import { PlainTextPlugin } from "lexical-solid/LexicalPlainTextPlugin";
-import { ContentEditable } from "lexical-solid/LexicalContentEditable";
-import { HistoryPlugin } from "lexical-solid/LexicalHistoryPlugin";
-import { LexicalErrorBoundary } from "lexical-solid/LexicalErrorBoundary";
+import { OnChangePlugin } from "@zanzythebar/lexical-solid/LexicalOnChangePlugin";
+import { AutoFocusPlugin } from "@zanzythebar/lexical-solid/LexicalAutoFocusPlugin";
+import { LexicalComposer } from "@zanzythebar/lexical-solid/LexicalComposer";
+import { PlainTextPlugin } from "@zanzythebar/lexical-solid/LexicalPlainTextPlugin";
+import { ContentEditable } from "@zanzythebar/lexical-solid/LexicalContentEditable";
+import { HistoryPlugin } from "@zanzythebar/lexical-solid/LexicalHistoryPlugin";
+import { LexicalErrorBoundary } from "@zanzythebar/lexical-solid/LexicalErrorBoundary";
 import TreeViewPlugin from "~/plugins/TreeViewPlugin";
 
 //import { EmojiNode } from "./nodes/EmojiNode";

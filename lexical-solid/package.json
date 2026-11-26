@@ -1,34 +1,121 @@
 {
-  "name": "lexical-solid",
-  "version": "0.21.0",
+  "name": "@zanzythebar/lexical-solid",
+  "version": "0.22.0",
   "license": "MIT",
   "type": "module",
-  "main": "./dist/cjs/index.cjs",
+  "engines": {
+    "node": ">=20"
+  },
   "module": "./dist/esm/index.js",
   "types": "./dist/types/index.d.ts",
   "exports": {
     ".": {
-      "solid": "./dist/source/index.jsx",
       "types": "./dist/types/index.d.ts",
-      "import": "./dist/esm/index.js",
-      "browser": "./dist/esm/index.js",
-      "require": "./dist/cjs/index.cjs",
-      "node": "./dist/cjs/index.cjs"
+      "import": {
+        "solid": "./dist/source/index.jsx",
+        "browser": "./dist/esm/index.js",
+        "node": "./dist/ssr/index.js",
+        "default": "./dist/esm/index.js"
+      }
+    },
+    "./TreeView": {
+      "types": "./dist/types/devtools-core/TreeView.d.ts",
+      "import": {
+        "solid": "./dist/source/devtools-core/TreeView.jsx",
+        "browser": "./dist/esm/devtools-core/TreeView.js",
+        "node": "./dist/ssr/devtools-core/TreeView.js",
+        "default": "./dist/esm/devtools-core/TreeView.js"
+      }
+    },
+    "./generateContent": {
+      "types": "./dist/types/devtools-core/generateContent.d.ts",
+      "import": {
+        "solid": "./dist/source/devtools-core/generateContent.js",
+        "browser": "./dist/esm/devtools-core/generateContent.js",
+        "node": "./dist/ssr/devtools-core/generateContent.js",
+        "default": "./dist/esm/devtools-core/generateContent.js"
+      }
+    },
+    "./useLexicalCommandsLog": {
+      "types": "./dist/types/devtools-core/useLexicalCommandsLog.d.ts",
+      "import": {
+        "solid": "./dist/source/devtools-core/useLexicalCommandsLog.js",
+        "browser": "./dist/esm/devtools-core/useLexicalCommandsLog.js",
+        "node": "./dist/ssr/devtools-core/useLexicalCommandsLog.js",
+        "default": "./dist/esm/devtools-core/useLexicalCommandsLog.js"
+      }
+    },
+    "./devtools-core/generateContent": {
+      "types": "./dist/types/devtools-core/generateContent.d.ts",
+      "import": {
+        "solid": "./dist/source/devtools-core/generateContent.js",
+        "browser": "./dist/esm/devtools-core/generateContent.js",
+        "node": "./dist/ssr/devtools-core/generateContent.js",
+        "default": "./dist/esm/devtools-core/generateContent.js"
+      }
+    },
+    "./devtools-core/index": {
+      "types": "./dist/types/devtools-core/index.d.ts",
+      "import": {
+        "solid": "./dist/source/devtools-core/index.js",
+        "browser": "./dist/esm/devtools-core/index.js",
+        "node": "./dist/ssr/devtools-core/index.js",
+        "default": "./dist/esm/devtools-core/index.js"
+      }
+    },
+    "./devtools-core/useLexicalCommandsLog": {
+      "types": "./dist/types/devtools-core/useLexicalCommandsLog.d.ts",
+      "import": {
+        "solid": "./dist/source/devtools-core/useLexicalCommandsLog.js",
+        "browser": "./dist/esm/devtools-core/useLexicalCommandsLog.js",
+        "node": "./dist/ssr/devtools-core/useLexicalCommandsLog.js",
+        "default": "./dist/esm/devtools-core/useLexicalCommandsLog.js"
+      }
+    },
+    "./shared/mergeRefs": {
+      "types": "./dist/types/shared/mergeRefs.d.ts",
+      "import": {
+        "solid": "./dist/source/shared/mergeRefs.js",
+        "browser": "./dist/esm/shared/mergeRefs.js",
+        "node": "./dist/ssr/shared/mergeRefs.js",
+        "default": "./dist/esm/shared/mergeRefs.js"
+      }
+    },
+    "./shared/point": {
+      "types": "./dist/types/shared/point.d.ts",
+      "import": {
+        "solid": "./dist/source/shared/point.js",
+        "browser": "./dist/esm/shared/point.js",
+        "node": "./dist/ssr/shared/point.js",
+        "default": "./dist/esm/shared/point.js"
+      }
+    },
+    "./shared/rect": {
+      "types": "./dist/types/shared/rect.d.ts",
+      "import": {
+        "solid": "./dist/source/shared/rect.js",
+        "browser": "./dist/esm/shared/rect.js",
+        "node": "./dist/ssr/shared/rect.js",
+        "default": "./dist/esm/shared/rect.js"
+      }
+    },
+    "./shared/warnOnlyOnce": {
+      "types": "./dist/types/shared/warnOnlyOnce.d.ts",
+      "import": {
+        "solid": "./dist/source/shared/warnOnlyOnce.js",
+        "browser": "./dist/esm/shared/warnOnlyOnce.js",
+        "node": "./dist/ssr/shared/warnOnlyOnce.js",
+        "default": "./dist/esm/shared/warnOnlyOnce.js"
+      }
     },
     "./*": {
-      "solid": "./dist/source/*.jsx",
       "types": "./dist/types/*.d.ts",
-      "import": "./dist/esm/*.js",
-      "browser": "./dist/esm/*.js",
-      "require": "./dist/cjs/*.cjs",
-      "node": "./dist/cjs/*.cjs"
-    }
-  },
-  "typesVersions": {
-    "*": {
-      "*": [
-        "./dist/types/*.d.ts"
-      ]
+      "import": {
+        "solid": "./dist/source/*.jsx",
+        "browser": "./dist/esm/*.js",
+        "node": "./dist/ssr/*.js",
+        "default": "./dist/esm/*.js"
+      }
     }
   },
   "files": [
@@ -37,48 +124,51 @@
     "README.md"
   ],
   "scripts": {
-    "build": "node build.js"
+    "build": "node build.js",
+    "prepack": "node build.js && node --input-type=module -e \"import { copyFileSync } from 'node:fs'; copyFileSync('../README.md', 'README.md')\""
   },
   "dependencies": {
-    "@lexical/clipboard": "~0.30.0",
-    "@lexical/code": "~0.30.0",
-    "@lexical/dragon": "~0.30.0",
-    "@lexical/hashtag": "~0.30.0",
-    "@lexical/history": "~0.30.0",
-    "@lexical/html": "~0.30.0",
-    "@lexical/link": "~0.30.0",
-    "@lexical/list": "~0.30.0",
-    "@lexical/mark": "~0.30.0",
-    "@lexical/markdown": "~0.30.0",
-    "@lexical/overflow": "~0.30.0",
-    "@lexical/plain-text": "~0.30.0",
-    "@lexical/rich-text": "~0.30.0",
-    "@lexical/selection": "~0.30.0",
-    "@lexical/table": "~0.30.0",
-    "@lexical/text": "~0.30.0",
-    "@lexical/utils": "~0.30.0",
-    "@lexical/yjs": "~0.30.0",
-    "lexical": "~0.30.0"
+    "@lexical/clipboard": "0.53.0",
+    "@lexical/code": "0.53.0",
+    "@lexical/dragon": "0.53.0",
+    "@lexical/hashtag": "0.53.0",
+    "@lexical/history": "0.53.0",
+    "@lexical/html": "0.53.0",
+    "@lexical/link": "0.53.0",
+    "@lexical/list": "0.53.0",
+    "@lexical/mark": "0.53.0",
+    "@lexical/markdown": "0.53.0",
+    "@lexical/overflow": "0.53.0",
+    "@lexical/plain-text": "0.53.0",
+    "@lexical/rich-text": "0.53.0",
+    "@lexical/selection": "0.53.0",
+    "@lexical/table": "0.53.0",
+    "@lexical/text": "0.53.0",
+    "@lexical/utils": "0.53.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.8",
     "@babel/preset-typescript": "^7.25.7",
+    "@lexical/yjs": "0.53.0",
     "@rollup/plugin-babel": "^6.0.4",
-    "@rollup/plugin-commonjs": "^28.0.1",
     "@rollup/plugin-node-resolve": "^15.3.0",
     "babel-preset-solid": "^1.9.2",
     "cross-env": "^7.0.3",
     "fast-glob": "^3.3.2",
+    "lexical": "0.53.0",
     "npm-run-all": "^4.1.5",
     "rimraf": "^6.0.1",
     "rollup": "^4.24.0",
     "solid-js": "^1.9.2",
-    "typescript": "^5.6.3",
+    "typescript": "5.8.3",
     "utility-types": "3.11.0",
     "yjs": "^13.6.20"
   },
   "peerDependencies": {
+    "@lexical/yjs": "0.53.0",
+    "lexical": "0.53.0",
     "solid-js": "^1.7.11",
-    "utility-types": "^3.10.0"
+    "utility-types": "^3.10.0",
+    "yjs": "^13.6.20"
   }
 }

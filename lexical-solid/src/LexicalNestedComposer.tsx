@@ -5,22 +5,17 @@ import {
 } from "./LexicalComposerContext";
 import { useCollaborationContext } from "./LexicalCollaborationContext";
 import {
+  createSharedNodeState,
+  getTransformSetFromKlass,
   EditorThemeClasses,
   Klass,
   LexicalEditor,
   LexicalNode,
   LexicalNodeReplacement,
 } from "lexical";
-import type { EditableListener, KlassConstructor, Transform } from "lexical";
+import type { EditableListener } from "lexical";
 import { createEffect, JSX, onCleanup, useContext } from "solid-js";
 import warnOnlyOnce from "./shared/warnOnlyOnce";
-
-function getTransformSetFromKlass(
-  klass: KlassConstructor<typeof LexicalNode>
-): Set<Transform<LexicalNode>> {
-  const transform = klass.transform();
-  return new Set(transform ? [transform] : []);
-}
 
 export interface LexicalNestedComposerProps {
   /**
@@ -42,8 +37,8 @@ export interface LexicalNestedComposerProps {
   initialTheme?: EditorThemeClasses;
   /**
    * @deprecated This feature is not safe or correctly implemented and will be
-   * removed in v0.32.0. The only correct time to configure the nodes is when
-   * creating the initialEditor.
+   * removed in a future release. Configure the nodes when creating the
+   * initialEditor instead.
    *
    * @example
    * ```ts
@@ -70,10 +65,10 @@ export interface LexicalNestedComposerProps {
 }
 
 const initialNodesWarning = warnOnlyOnce(
-  `LexicalNestedComposer initialNodes is deprecated and will be removed in v0.32.0, it has never worked correctly.\nYou can configure your editor's nodes with createEditor({nodes: [], parentEditor: $getEditor()})`
+  `LexicalNestedComposer initialNodes is deprecated.\nYou can configure your editor's nodes with createEditor({nodes: [], parentEditor: $getEditor()})`
 );
 const explicitNamespaceWarning = warnOnlyOnce(
-  `LexicalNestedComposer initialEditor should explicitly initialize its namespace when the node configuration differs from the parentEditor. For backwards compatibility, the namespace will be initialized from parentEditor until v0.32.0, but this has always had incorrect copy/paste behavior when the configuration differed.\nYou can configure your editor's namespace with createEditor({namespace: 'nested-editor-namespace', nodes: [], parentEditor: $getEditor()}).`
+  `LexicalNestedComposer initialEditor should explicitly initialize its namespace when its node configuration differs from the parent editor to avoid incorrect copy/paste behavior.\nYou can configure your editor's namespace with createEditor({namespace: 'nested-editor-namespace', nodes: [], parentEditor: $getEditor()}).`
 );
 
 export function LexicalNestedComposer(
@@ -121,18 +116,18 @@ export function LexicalNestedComposer(
           klass: entry.klass,
           replace: entry.replace,
           replaceWithKlass: entry.replaceWithKlass,
+          sharedNodeState: createSharedNodeState(entry.klass),
           transforms: getTransformSetFromKlass(entry.klass),
         });
       }
     } else if (!explicitNamespace) {
-      initialNodesWarning();
-      if (!explicitNamespace) {
-        explicitNamespaceWarning();
-        initialEditor._config.namespace = parentEditor._config.namespace;
-      }
+      explicitNamespaceWarning();
+      initialEditor._config.namespace = parentEditor._config.namespace;
     }
   } else {
-    for (let klass of props.initialNodes) {
+    initialNodesWarning();
+    for (const registration of props.initialNodes) {
+      let klass = registration;
       let replace = null;
       let replaceWithKlass = null;
 
@@ -148,6 +143,7 @@ export function LexicalNestedComposer(
         klass,
         replace,
         replaceWithKlass,
+        sharedNodeState: createSharedNodeState(registration),
         transforms: getTransformSetFromKlass(klass),
       });
     }
